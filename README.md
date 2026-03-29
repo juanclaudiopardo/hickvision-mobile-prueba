@@ -48,3 +48,100 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+Solución final
+
+Después de investigar a fondo, estos son los paquetes definitivos:
+
+Paquetes a instalar
+
+# 1. Build nativo (necesario por react-native-webrtc)
+
+npx expo install expo-dev-client
+
+# 2. WebRTC — usar el fork de Stream (soporta New Architecture)
+
+npm install @stream-io/react-native-webrtc@137.1.2
+npx expo install @config-plugins/react-native-webrtc
+
+# 3. SIP sobre WebSocket
+
+npm install jssip
+
+# 4. Conexión con tu backend
+
+npm install socket.io-client
+
+# 5. Audio (ringtones, tonos)
+
+npx expo install expo-audio
+
+# 6. Video RTSP — WebView + JSMpeg (sin módulo nativo extra)
+
+npx expo install react-native-webview
+
+Por qué estos y no otros
+
+┌────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+ │ Paquete │ Por qué este │
+├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ @stream-io/react-native-webrtc │ Fork del original que sí soporta New Architecture. Misma API que react-native-webrtc, drop-in replacement. Sobrevive a Expo SDK 55 (donde New Arch es │
+│ │ obligatoria) │
+├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+ │ jssip │ Excelente mantenimiento (7 releases en 2026). JS puro, sin problemas │
+├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+ │ socket.io-client │ 63k stars, estándar de la industria. JS puro │
+├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+ │ expo-audio │ First-party Expo. Para ringtones y sonidos de la app │
+├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+ │ react-native-webview │ Para el video RTSP. Tu backend ya transcodea RTSP→MPEG via WebSocket. Metés JSMpeg en un WebView y listo — mismo resultado que en web, ~50ms de │
+│ │ latencia, cero módulos nativos extra │  
+ └────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Por qué NO los otros
+
+┌────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+ │ Descartada │ Razón │
+├────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+ │ react-native-webrtc (original) │ No soporta New Architecture. En SDK 55 deja de funcionar │
+├────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ react-native-vlc-media-player │ Config plugin roto con Expo 54, build issues frecuentes │  
+ ├────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+ │ react-native-video │ No soporta RTSP. Necesitarías convertir a HLS, que agrega 4-10 seg de latencia — inaceptable para un portero │  
+ ├────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+ │ LiveKit / Twilio │ Requieren cambiar toda la arquitectura. Overkill │
+└────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Video RTSP: la jugada inteligente
+
+En vez de pelearte con VLC o buscar un player RTSP nativo, usás lo que ya funciona: tu backend transcoda RTSP→MPEG→WebSocket, y en mobile lo consumís con un WebView que corre JSMpeg  
+ adentro. Mismo approach que tu web, latencia de ~50ms, sin módulos nativos problemáticos.
+
+app.json
+
+{
+"expo": {
+"plugins": [  
+ [
+"@config-plugins/react-native-webrtc",
+ {
+ "cameraPermission": "Permitir acceso a la cámara para videollamadas.",
+"microphonePermission": "Permitir acceso al micrófono para llamadas."
+ }
+],  
+ [
+ "expo-audio",
+{
+"microphonePermission": "Permitir acceso al micrófono para llamadas."
+}
+ ]
+]  
+ }  
+ }
+
+---
+
+Total: 6 paquetes, todos bien mantenidos, todos compatibles con Expo SDK 54 y preparados para SDK 55.
+
+Querés que arranquemos a armar la estructura del proyecto?
+# hickvision-mobile-prueba
