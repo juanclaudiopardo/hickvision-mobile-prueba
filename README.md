@@ -124,17 +124,17 @@ app.json
 "plugins": [  
  [
 "@config-plugins/react-native-webrtc",
- {
- "cameraPermission": "Permitir acceso a la cámara para videollamadas.",
+{
+"cameraPermission": "Permitir acceso a la cámara para videollamadas.",
 "microphonePermission": "Permitir acceso al micrófono para llamadas."
- }
+}
 ],  
  [
- "expo-audio",
+"expo-audio",
 {
 "microphonePermission": "Permitir acceso al micrófono para llamadas."
 }
- ]
+]
 ]  
  }  
  }
@@ -144,4 +144,7 @@ app.json
 Total: 6 paquetes, todos bien mantenidos, todos compatibles con Expo SDK 54 y preparados para SDK 55.
 
 Querés que arranquemos a armar la estructura del proyecto?
+
 # hickvision-mobile-prueba
+
+cd /Users/juanpardo/Desktop/hikvision_cam_sip && docker compose up -d postgres redis asterisk sdk-bridge api-server
