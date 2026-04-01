@@ -13,7 +13,7 @@ import { api } from '../src/services/api';
 import { useSIP } from '../src/hooks/useSIP';
 import CallModal from '../src/components/CallModal';
 import IncomingCallModal from '../src/components/IncomingCallModal';
-import { useWebRTC } from '../src/hooks/useWebRTC';
+import { useWebRTCContext } from '../src/context/WebRTCContext';
 import { useRTSP } from '../src/hooks/useRTSP';
 import RTSPPlayer from '../src/components/RTSPPlayer';
 import CallHistory from '../src/components/CallHistory';
@@ -21,7 +21,7 @@ import CallHistory from '../src/components/CallHistory';
 export default function Dashboard() {
   const { isConnected: sipConnected, currentCall, incomingCalls, initiateCall, answerCall, endCall } = useSIP();
   const router = useRouter();
-  const webrtc = useWebRTC();
+  const webrtc = useWebRTCContext();
   const rtsp = useRTSP();
   const [showCallModal, setShowCallModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -56,12 +56,8 @@ export default function Dashboard() {
   };
 
   const handleCall = async (target: string, isVideo: boolean) => {
-    try {
-      await initiateCall(target, isVideo);
-      router.push({ pathname: '/call', params: { target, type: isVideo ? 'video' : 'voice' } });
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'No se pudo iniciar la llamada');
-    }
+    // Solo navegar al CallScreen - JsSIP/WebRTC hace la llamada directamente
+    router.push({ pathname: '/call', params: { target, type: isVideo ? 'video' : 'voice' } });
   };
 
   const handleDoor = async (action: 'open' | 'close') => {

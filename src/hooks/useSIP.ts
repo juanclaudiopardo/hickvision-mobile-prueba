@@ -41,11 +41,23 @@ export const useSIP = (): UseSIPReturn => {
       setIsConnected(false);
     });
 
-    socket.on('call:incoming', (call: Call) => {
+    socket.on('call:incoming', (call: any) => {
       console.log('[SIP] Llamada entrante:', call);
+
+      // Filtrar eventos internos de Asterisk que no son llamadas reales
+      const channel = call.channel || '';
+      if (
+        channel.startsWith('Local/') ||
+        channel.startsWith('PJSIP/webrtc') ||
+        (call.from === '<unknown>' && call.target === 's')
+      ) {
+        console.log('[SIP] Ignorando evento interno:', channel);
+        return;
+      }
+
       setIncomingCalls(prev => {
         if (prev.some(existing => existing.id === call.id)) return prev;
-        return [...prev, call];
+        return [...prev, call as Call];
       });
     });
 

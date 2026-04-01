@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { RTCView } from '@stream-io/react-native-webrtc';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useWebRTC } from '../src/hooks/useWebRTC';
+import { useWebRTCContext } from '../src/context/WebRTCContext';
 
 export default function CallScreen() {
   const router = useRouter();
@@ -11,7 +11,7 @@ export default function CallScreen() {
   const callType = params.type || 'voice';
   const isVideo = callType === 'video';
 
-  const webrtc = useWebRTC();
+  const webrtc = useWebRTCContext();
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -69,6 +69,14 @@ export default function CallScreen() {
           </Text>
         </View>
       </View>
+
+      {/* RTCView para audio remoto (siempre renderizado cuando hay stream) */}
+      {webrtc.remoteStream && (
+        <RTCView
+          streamURL={webrtc.remoteStream.toURL()}
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+        />
+      )}
 
       {/* Video area */}
       <View style={styles.videoArea}>

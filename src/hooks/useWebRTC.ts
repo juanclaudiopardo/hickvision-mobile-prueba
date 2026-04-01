@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import JsSIP from 'jssip';
 import type { UA } from 'jssip';
 import { mediaDevices, MediaStream } from '@stream-io/react-native-webrtc';
+import InCallManager from 'react-native-incall-manager';
 import { SIP_WS_URL, SIP_URI, SIP_PASSWORD, STUN_SERVER } from '../config/constants';
 
 interface UseWebRTCReturn {
@@ -37,6 +38,7 @@ export const useWebRTC = (): UseWebRTCReturn => {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track: any) => track.stop());
     }
+    InCallManager.stop();
     setLocalStream(null);
     setRemoteStream(null);
     setIsConnected(false);
@@ -72,7 +74,68 @@ export const useWebRTC = (): UseWebRTCReturn => {
     });
 
     ua.on('newRTCSession', (event: any) => {
-      sessionRef.current = event.session;
+      const session = event.session;
+      sessionRef.current = session;
+
+      session.on('progress', () => {
+        console.log('[WebRTC] Llamada en progreso');
+      });
+
+      session.on('accepted', () => {
+        console.log('[WebRTC] Llamada aceptada');
+        InCallManager.start({ media: 'audio' });
+        InCallManager.setForceSpeakerphoneOn(true);
+        setIsConnected(true);
+      });
+
+      session.on('confirmed', () => {
+        console.log('[WebRTC] Llamada confirmada');
+        setIsConnected(true);
+      });
+
+      session.on('ended', () => {
+        console.log('[WebRTC] Llamada finalizada');
+        InCallManager.stop();
+        sessionRef.current = null;
+        teardownMedia();
+      });
+
+      session.on('failed', (evt: any) => {
+        console.error('[WebRTC] Llamada fallida', evt?.cause || evt);
+        InCallManager.stop();
+        sessionRef.current = null;
+        teardownMedia();
+      });
+
+      // Para llamadas salientes, la peerconnection ya existe cuando newRTCSession se dispara
+      // Para entrantes, se crea después. Cubrimos ambos casos.
+      const setupPC = (pc: any) => {
+        if (!pc) return;
+        console.log('[WebRTC] Configurando track listener en PeerConnection');
+        // Usar addEventListener para no sobreescribir handlers internos de JsSIP
+        pc.addEventListener('track', (trackEvent: any) => {
+          const [stream] = trackEvent.streams;
+          if (!stream) return;
+          const audioTracks = stream.getAudioTracks();
+          const videoTracks = stream.getVideoTracks();
+          console.log(`[WebRTC] Stream remoto: ${audioTracks.length} audio, ${videoTracks.length} video`);
+          audioTracks.forEach((t: any) => {
+            console.log(`[WebRTC] Audio track: enabled=${t.enabled}, muted=${t.muted}`);
+            t.enabled = true;
+          });
+          setRemoteStream(stream);
+        });
+      };
+
+      // Si connection ya existe (llamada saliente)
+      if (session.connection) {
+        setupPC(session.connection);
+      }
+
+      // Si connection se crea después (llamada entrante)
+      session.on('peerconnection', () => {
+        setupPC(session.connection);
+      });
     });
 
     ua.start();
@@ -91,46 +154,6 @@ export const useWebRTC = (): UseWebRTCReturn => {
       uaRef.current = null;
       teardownMedia();
     };
-  }, [teardownMedia]);
-
-  const bindSessionEvents = useCallback((session: any) => {
-    session.on('progress', () => {
-      console.log('[WebRTC] Llamada en progreso');
-    });
-
-    session.on('accepted', () => {
-      console.log('[WebRTC] Llamada aceptada');
-      setIsConnected(true);
-    });
-
-    session.on('confirmed', () => {
-      console.log('[WebRTC] Llamada confirmada');
-      setIsConnected(true);
-    });
-
-    session.on('ended', () => {
-      console.log('[WebRTC] Llamada finalizada');
-      sessionRef.current = null;
-      teardownMedia();
-    });
-
-    session.on('failed', (event: any) => {
-      console.error('[WebRTC] Llamada fallida', event?.cause || event);
-      sessionRef.current = null;
-      teardownMedia();
-    });
-
-    session.on('peerconnection', () => {
-      const pc = session.connection;
-      if (!pc) return;
-
-      pc.ontrack = (trackEvent: any) => {
-        const [stream] = trackEvent.streams;
-        if (!stream) return;
-        console.log('[WebRTC] Stream remoto recibido');
-        setRemoteStream(stream);
-      };
-    });
   }, [teardownMedia]);
 
   const startCall = useCallback(async (target: string, withVideo: boolean) => {
@@ -165,10 +188,9 @@ export const useWebRTC = (): UseWebRTCReturn => {
       },
     };
 
-    const session = uaRef.current.call(`sip:${target}@${serverIp}`, options);
+    const session = (uaRef.current as any).call(`sip:${target}@${serverIp}`, options);
     sessionRef.current = session;
-    bindSessionEvents(session);
-  }, [bindSessionEvents]);
+  }, []);
 
   const endCall = useCallback(() => {
     if (sessionRef.current) {
