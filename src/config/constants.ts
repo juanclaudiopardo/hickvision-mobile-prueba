@@ -10,4 +10,4 @@ export const SIP_WS_URL = `ws://${SERVER_IP}:8088/ws`;
 export const SIP_URI = `sip:webrtc@${SERVER_IP}`;
 export const SIP_PASSWORD = 'webrtc123';
 export const STUN_SERVER = 'stun:stun.l.google.com:19302';
-export const RTSP_URL = `rtsp://admin:German987@192.168.0.243:554/Streaming/Channels/101`;
+export const RTSP_URL = `rtsp://admin:German987@192.168.0.243:554/Streaming/Channels/102`;
