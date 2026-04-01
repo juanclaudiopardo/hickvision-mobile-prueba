@@ -5,6 +5,7 @@ export interface Call {
   type: 'voice' | 'video';
   status: 'initiating' | 'ringing' | 'connected' | 'ended';
   source?: string;
+  channel?: string;
   startTime?: Date;
   endTime?: Date;
 }

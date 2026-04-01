@@ -56,7 +56,8 @@ export const useSIP = (): UseSIPReturn => {
       }
 
       setIncomingCalls(prev => {
-        if (prev.some(existing => existing.id === call.id)) return prev;
+        // Evitar duplicados por id o por mismo canal
+        if (prev.some(existing => existing.id === call.id || existing.channel === call.channel)) return prev;
         return [...prev, call as Call];
       });
     });

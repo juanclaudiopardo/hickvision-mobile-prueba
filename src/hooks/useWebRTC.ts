@@ -12,7 +12,9 @@ interface UseWebRTCReturn {
   isAudioEnabled: boolean;
   isConnected: boolean;
   isRegistered: boolean;
+  hasIncomingCall: boolean;
   startCall: (target: string, withVideo: boolean) => Promise<void>;
+  answerIncoming: () => Promise<void>;
   endCall: () => void;
   toggleVideo: () => void;
   toggleAudio: () => void;
@@ -25,6 +27,8 @@ export const useWebRTC = (): UseWebRTCReturn => {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
+  const [hasIncomingCall, setHasIncomingCall] = useState(false);
+  const incomingSessionRef = useRef<any>(null);
 
   const uaRef = useRef<UA | null>(null);
   const sessionRef = useRef<any>(null);
@@ -75,6 +79,13 @@ export const useWebRTC = (): UseWebRTCReturn => {
 
     ua.on('newRTCSession', (event: any) => {
       const session = event.session;
+      const isIncoming = event.originator === 'remote';
+      console.log(`[WebRTC] newRTCSession: ${isIncoming ? 'ENTRANTE' : 'saliente'}`);
+
+      if (isIncoming) {
+        incomingSessionRef.current = session;
+        setHasIncomingCall(true);
+      }
       sessionRef.current = session;
 
       session.on('progress', () => {
@@ -192,6 +203,32 @@ export const useWebRTC = (): UseWebRTCReturn => {
     sessionRef.current = session;
   }, []);
 
+  const answerIncoming = useCallback(async () => {
+    const session = incomingSessionRef.current;
+    if (!session) {
+      console.warn('[WebRTC] No hay llamada entrante para contestar');
+      return;
+    }
+
+    console.log('[WebRTC] Contestando llamada entrante...');
+    const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
+    setLocalStream(stream as MediaStream);
+    setIsAudioEnabled(true);
+
+    session.answer({
+      mediaStream: stream,
+      mediaConstraints: { audio: true, video: false },
+      pcConfig: {
+        iceServers: [{ urls: STUN_SERVER }],
+      },
+    });
+
+    InCallManager.start({ media: 'audio' });
+    InCallManager.setForceSpeakerphoneOn(true);
+    setHasIncomingCall(false);
+    incomingSessionRef.current = null;
+  }, []);
+
   const endCall = useCallback(() => {
     if (sessionRef.current) {
       try {
@@ -199,6 +236,13 @@ export const useWebRTC = (): UseWebRTCReturn => {
       } catch {}
       sessionRef.current = null;
     }
+    if (incomingSessionRef.current) {
+      try {
+        incomingSessionRef.current.terminate();
+      } catch {}
+      incomingSessionRef.current = null;
+    }
+    setHasIncomingCall(false);
     teardownMedia();
   }, [teardownMedia]);
 
@@ -225,7 +269,9 @@ export const useWebRTC = (): UseWebRTCReturn => {
     isAudioEnabled,
     isConnected,
     isRegistered,
+    hasIncomingCall,
     startCall,
+    answerIncoming,
     endCall,
     toggleVideo,
     toggleAudio,

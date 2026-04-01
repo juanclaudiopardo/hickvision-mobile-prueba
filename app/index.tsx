@@ -73,9 +73,9 @@ export default function Dashboard() {
     }
   };
 
-  const handleAnswer = async (callId: string) => {
+  const handleAnswer = async (_callId: string) => {
     try {
-      await answerCall(callId);
+      await webrtc.answerIncoming();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo contestar');
     }
