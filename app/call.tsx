@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { RTCView } from '@stream-io/react-native-webrtc';
+import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useWebRTCContext } from '../src/context/WebRTCContext';
+import { useRTSP } from '../src/hooks/useRTSP';
+import { api } from '../src/services/api';
 
 export default function CallScreen() {
   const router = useRouter();
@@ -13,9 +16,9 @@ export default function CallScreen() {
   const isIncoming = params.incoming === 'true';
 
   const webrtc = useWebRTCContext();
+  const rtsp = useRTSP();
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
 
   // Timer de duración
   useEffect(() => {
@@ -23,16 +26,25 @@ export default function CallScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // Iniciar llamada WebRTC al montar (solo para salientes, entrantes ya fueron contestadas)
+  // Iniciar llamada SIP (siempre voz, RTSP maneja video) + RTSP si es videollamada
   useEffect(() => {
     if (!isIncoming) {
-      webrtc.startCall(target, isVideo).catch(err => {
+      // Siempre llamada de voz por SIP (audio bidireccional)
+      webrtc.startCall(target, false).catch(err => {
         console.error('[CallScreen] Error iniciando llamada:', err);
+      });
+    }
+
+    // Si es videollamada, iniciar RTSP para video del portero
+    if (isVideo) {
+      rtsp.connect().catch(err => {
+        console.error('[CallScreen] Error conectando RTSP:', err);
       });
     }
 
     return () => {
       webrtc.endCall();
+      if (isVideo) rtsp.disconnect();
     };
   }, []);
 
@@ -42,20 +54,67 @@ export default function CallScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const [doorLoading, setDoorLoading] = useState(false);
+
   const handleMute = () => {
     webrtc.toggleAudio();
     setIsMuted(!isMuted);
   };
 
-  const handleVideoToggle = () => {
-    webrtc.toggleVideo();
-    setIsVideoOff(!isVideoOff);
+  const handleDoor = async () => {
+    setDoorLoading(true);
+    try {
+      await api.openDoor();
+      Alert.alert('Puerta', 'Puerta abierta');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Error abriendo puerta');
+    } finally {
+      setDoorLoading(false);
+    }
   };
 
   const handleHangup = () => {
     webrtc.endCall();
+    if (isVideo) rtsp.disconnect();
     router.back();
   };
+
+  // HTML para JSMpeg RTSP player
+  const rtspHtml = rtsp.wsUrl ? `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <style>
+    * { margin: 0; padding: 0; }
+    body { background: #000; overflow: hidden; }
+    canvas { width: 100%; height: 100%; object-fit: contain; }
+    #status { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #94a3b8; font-family: sans-serif; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="status">Conectando video...</div>
+  <script src="https://jsmpeg.com/jsmpeg.min.js"></script>
+  <script>
+    var canvas = document.getElementById('canvas');
+    var status = document.getElementById('status');
+    try {
+      var player = new JSMpeg.Player('${rtsp.wsUrl}', {
+        canvas: canvas,
+        autoplay: true,
+        audio: false,
+        disableGl: false,
+        onSourceEstablished: function() {
+          status.style.display = 'none';
+        }
+      });
+    } catch(e) {
+      status.textContent = 'Error: ' + e.message;
+    }
+  </script>
+</body>
+</html>` : null;
 
   return (
     <View style={styles.container}>
@@ -83,32 +142,26 @@ export default function CallScreen() {
 
       {/* Video area */}
       <View style={styles.videoArea}>
-        {isVideo && webrtc.remoteStream ? (
-          <RTCView
-            streamURL={webrtc.remoteStream.toURL()}
+        {isVideo && rtspHtml ? (
+          <WebView
+            source={{ html: rtspHtml }}
             style={styles.remoteVideo}
-            objectFit="cover"
+            javaScriptEnabled
+            mediaPlaybackRequiresUserAction={false}
+            allowsInlineMediaPlayback
           />
+        ) : isVideo ? (
+          <View style={styles.voicePlaceholder}>
+            <Text style={styles.placeholderText}>Conectando video...</Text>
+          </View>
         ) : (
           <View style={styles.voicePlaceholder}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>{isVideo ? 'V' : 'T'}</Text>
+              <Text style={styles.avatarText}>T</Text>
             </View>
             <Text style={styles.placeholderText}>
               {webrtc.isConnected ? `Conectado con ${target}` : 'Conectando...'}
             </Text>
-          </View>
-        )}
-
-        {/* Video local (miniatura) */}
-        {isVideo && webrtc.localStream && (
-          <View style={styles.localVideoContainer}>
-            <RTCView
-              streamURL={webrtc.localStream.toURL()}
-              style={styles.localVideo}
-              objectFit="cover"
-              mirror
-            />
           </View>
         )}
       </View>
@@ -123,15 +176,22 @@ export default function CallScreen() {
           <Text style={styles.controlLabel}>{isMuted ? 'Sin audio' : 'Audio'}</Text>
         </Pressable>
 
-        {isVideo && (
-          <Pressable
-            style={[styles.controlBtn, isVideoOff && styles.controlBtnActive]}
-            onPress={handleVideoToggle}
-          >
-            <Text style={styles.controlIcon}>{isVideoOff ? 'X' : 'Cam'}</Text>
-            <Text style={styles.controlLabel}>{isVideoOff ? 'Sin video' : 'Video'}</Text>
-          </Pressable>
-        )}
+        <Pressable
+          style={[styles.controlBtn, !webrtc.isSpeakerOn && styles.controlBtnActive]}
+          onPress={() => webrtc.toggleSpeaker()}
+        >
+          <Text style={styles.controlIcon}>{webrtc.isSpeakerOn ? 'Spk' : 'Ear'}</Text>
+          <Text style={styles.controlLabel}>{webrtc.isSpeakerOn ? 'Altavoz' : 'Auricular'}</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.controlBtn, { backgroundColor: '#16a34a' }]}
+          onPress={handleDoor}
+          disabled={doorLoading}
+        >
+          <Text style={styles.controlIcon}>{doorLoading ? '...' : 'Door'}</Text>
+          <Text style={styles.controlLabel}>Abrir</Text>
+        </Pressable>
 
         <Pressable style={styles.hangupBtn} onPress={handleHangup}>
           <Text style={styles.hangupIcon}>End</Text>
@@ -185,10 +245,11 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#000',
   },
   remoteVideo: {
     flex: 1,
+    backgroundColor: '#000',
   },
   voicePlaceholder: {
     flex: 1,
@@ -212,20 +273,6 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: '#94a3b8',
     fontSize: 16,
-  },
-  localVideoContainer: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 100,
-    height: 140,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#334155',
-  },
-  localVideo: {
-    flex: 1,
   },
   controls: {
     flexDirection: 'row',

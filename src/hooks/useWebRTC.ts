@@ -18,6 +18,8 @@ interface UseWebRTCReturn {
   endCall: () => void;
   toggleVideo: () => void;
   toggleAudio: () => void;
+  isSpeakerOn: boolean;
+  toggleSpeaker: () => void;
 }
 
 export const useWebRTC = (): UseWebRTCReturn => {
@@ -262,6 +264,14 @@ export const useWebRTC = (): UseWebRTCReturn => {
     setIsAudioEnabled(audioTrack.enabled);
   }, [localStream]);
 
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+
+  const toggleSpeaker = useCallback(() => {
+    const next = !isSpeakerOn;
+    InCallManager.setForceSpeakerphoneOn(next);
+    setIsSpeakerOn(next);
+  }, [isSpeakerOn]);
+
   return {
     localStream,
     remoteStream,
@@ -270,10 +280,12 @@ export const useWebRTC = (): UseWebRTCReturn => {
     isConnected,
     isRegistered,
     hasIncomingCall,
+    isSpeakerOn,
     startCall,
     answerIncoming,
     endCall,
     toggleVideo,
     toggleAudio,
+    toggleSpeaker,
   };
 };
