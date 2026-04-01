@@ -6,10 +6,11 @@ import { useWebRTCContext } from '../src/context/WebRTCContext';
 
 export default function CallScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ target: string; type: string }>();
+  const params = useLocalSearchParams<{ target: string; type: string; incoming: string }>();
   const target = params.target || '200';
   const callType = params.type || 'voice';
   const isVideo = callType === 'video';
+  const isIncoming = params.incoming === 'true';
 
   const webrtc = useWebRTCContext();
   const [callDuration, setCallDuration] = useState(0);
@@ -22,11 +23,13 @@ export default function CallScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // Iniciar llamada WebRTC al montar
+  // Iniciar llamada WebRTC al montar (solo para salientes, entrantes ya fueron contestadas)
   useEffect(() => {
-    webrtc.startCall(target, isVideo).catch(err => {
-      console.error('[CallScreen] Error iniciando llamada:', err);
-    });
+    if (!isIncoming) {
+      webrtc.startCall(target, isVideo).catch(err => {
+        console.error('[CallScreen] Error iniciando llamada:', err);
+      });
+    }
 
     return () => {
       webrtc.endCall();

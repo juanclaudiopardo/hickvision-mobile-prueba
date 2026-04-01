@@ -76,6 +76,7 @@ export default function Dashboard() {
   const handleAnswer = async (_callId: string) => {
     try {
       await webrtc.answerIncoming();
+      router.push({ pathname: '/call', params: { target: '200', type: 'voice', incoming: 'true' } });
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo contestar');
     }
