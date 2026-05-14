@@ -2,15 +2,32 @@
 
 ## Paquetes instalados
 
+### Core (SIP / WebRTC / RTSP / audio)
+
 | Paquete | Version instalada | Tipo | Repo |
 |---|---|---|---|
 | `@stream-io/react-native-webrtc` | 137.1.2 | Fork WebRTC (soporta New Arch) | https://github.com/nickolasg/react-native-webrtc (repo de Stream) |
 | `@config-plugins/react-native-webrtc` | 13.0.0 | Config plugin para Expo | https://github.com/expo/config-plugins/tree/main/packages/react-native-webrtc |
 | `jssip` | 3.13.6 | SIP sobre WebSocket (JS puro) | https://github.com/nickolasg/jssip |
 | `socket.io-client` | 4.8.3 | WebSocket con backend (JS puro) | https://github.com/socketio/socket.io-client |
+| `react-native-incall-manager` | 4.2.1 | Audio routing (speaker/earpiece) durante llamada | https://github.com/react-native-webrtc/react-native-incall-manager |
 | `expo-audio` | (version de SDK 54) | Audio: ringtones, tonos | https://github.com/expo/expo/tree/main/packages/expo-audio |
 | `react-native-webview` | (version de SDK 54) | WebView para video RTSP/JSMpeg | https://github.com/nickolasg/react-native-webview |
 | `expo-dev-client` | (version de SDK 54) | Build nativo (reemplaza Expo Go) | https://github.com/expo/expo/tree/main/packages/expo-dev-client |
+
+### VoIP Push (llamadas con app cerrada)
+
+Estas libs habilitan que el celular muestre la UI nativa de "llamada entrante" (tipo WhatsApp) aun con la app matada. Plan completo en `PUSH_NOTIFICATIONS_PLAN.md`.
+
+| Paquete | Version instalada | Tipo | Repo |
+|---|---|---|---|
+| `@react-native-firebase/app` | (latest) | Core de RNFirebase, requerido por messaging | https://github.com/invertase/react-native-firebase |
+| `@react-native-firebase/messaging` | (latest) | FCM (Android push) | https://rnfirebase.io/messaging/usage |
+| `@notifee/react-native` | (latest) | Notificaciones de llamada entrante en Android (full-screen intent + categoria call). Soporta New Arch. | https://notifee.app |
+| `react-native-callkeep` | NO instalado | iOS (cuando se sume) — UI nativa CallKit. **No funciona en New Architecture** por overloads en el modulo nativo Android. | https://github.com/react-native-webrtc/react-native-callkeep |
+| `react-native-voip-push-notification` | NO instalado todavia | PushKit / VoIP push iOS. Pendiente para fase iOS. | https://github.com/react-native-webrtc/react-native-voip-push-notification |
+
+**Nota historica:** inicialmente probamos `react-native-callkeep` para Android (ConnectionService) pero en SDK 54 con `newArchEnabled: true` el modulo crashea con `Module exports two methods to JavaScript with the same name: "displayIncomingCall"`. Es por overloads Java en el codigo nativo que el bridge TurboModule no soporta. La alternativa fue `@notifee/react-native`, que cubre el mismo caso de uso (mostrar UI de llamada entrante sobre el lockscreen) sin entrar en conflicto con New Arch.
 
 ---
 
@@ -88,6 +105,39 @@ npm update socket.io-client
 
 No depende de la version de Expo/RN. Solo asegurar que la version major coincida con la del servidor (`socket.io` en el backend).
 
+### 6. @react-native-firebase/* (REVISAR MANUAL)
+
+Las versiones de `@react-native-firebase/app` y `@react-native-firebase/messaging` deben ser identicas entre si y compatibles con el SDK de Expo.
+
+**Donde buscar:**
+- https://rnfirebase.io/ (matriz de compatibilidad)
+- https://github.com/invertase/react-native-firebase/releases
+
+`npx expo install --fix` actualiza ambos a la version recomendada por Expo, pero verificar el changelog antes de subir un major.
+
+### 7. @notifee/react-native (autolinking, sin plugin)
+
+Notifee se autolinkea con Expo y no necesita config plugin separado. `npx expo install --fix` lo actualiza junto con el resto del namespace Expo (aunque no es del namespace Expo, expo-doctor lo trata bien).
+
+Si en algun momento falla a actualizar:
+```bash
+npm info @notifee/react-native version
+npm install @notifee/react-native@latest
+```
+
+Soporta New Architecture en sus versiones recientes (>= 9.x). Verificar el changelog antes de subir un major.
+
+### 8. react-native-callkeep (NO usar en Android con New Arch)
+
+El paquete subyacente `react-native-callkeep` tiene un bug de incompatibilidad con TurboModule en su modulo nativo Android (overloads Java en `displayIncomingCall`). En SDK 54 con `newArchEnabled: true` la app crashea al cargar.
+
+**Si en el futuro se quiere usar en iOS:**
+- Instalarlo solo para iOS via `app.config.js` (config plugin condicional)
+- En Android, mantener `@notifee/react-native`
+- Alternativa: contribuir el patch upstream o usar patch-package para renombrar uno de los overloads en el modulo nativo Android
+
+**Cuando SDK 55 fuerze New Arch para iOS tambien**, evaluar si el bug fue resuelto upstream antes de adoptar.
+
 ---
 
 ## Checklist de upgrade
@@ -99,10 +149,14 @@ Cuando actualices Expo SDK, seguir en este orden:
 - [ ] Buscar version compatible de `@stream-io/react-native-webrtc`
 - [ ] Buscar version compatible de `@config-plugins/react-native-webrtc`
 - [ ] `npm update jssip socket.io-client`
+- [ ] Verificar `@react-native-firebase/app` y `/messaging` (deben matchear entre si)
+- [ ] Verificar `@config-plugins/react-native-callkeep` (matchea major con SDK)
 - [ ] `npx expo prebuild --clean`
 - [ ] Testear videollamada SIP
 - [ ] Testear video RTSP (WebView + JSMpeg)
 - [ ] Testear audio (ringtones)
+- [ ] Testear push FCM con app en background (callkeep displayIncomingCall)
+- [ ] Testear push FCM con app matada (cold start desde push)
 
 ---
 

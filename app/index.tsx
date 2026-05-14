@@ -10,6 +10,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { api } from '../src/services/api';
+import { displayIncomingCall } from '../src/services/callKeep';
+import { sendTestPush } from '../src/services/devices';
+import { getCachedFcmToken } from '../src/services/voipPush';
 import { useSIP } from '../src/hooks/useSIP';
 import CallModal from '../src/components/CallModal';
 import IncomingCallModal from '../src/components/IncomingCallModal';
@@ -277,6 +280,73 @@ export default function Dashboard() {
             </View>
           ))
         )}
+      </View>
+
+      {/* Debug VoIP Push */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Debug VoIP Push</Text>
+        <Pressable
+          style={[styles.doorBtn, { backgroundColor: '#1e3a5f', marginBottom: 8 }]}
+          onPress={() =>
+            displayIncomingCall(
+              `debug-${Date.now()}`,
+              'Test Portero',
+              '200',
+              false
+            )
+          }
+        >
+          <Text style={styles.doorBtnText}>Probar UI nativa (sin push)</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.doorBtn, { backgroundColor: '#0f172a', marginBottom: 8 }]}
+          onPress={() => {
+            Alert.alert(
+              'Bloquea el celular',
+              'Tenes 5 segundos para bloquear el celular. La notificacion va a aparecer sobre el lockscreen.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                  text: 'OK, dale',
+                  onPress: () => {
+                    setTimeout(() => {
+                      displayIncomingCall(
+                        `debug-locked-${Date.now()}`,
+                        'Test Portero (lockscreen)',
+                        '200',
+                        false
+                      );
+                    }, 5000);
+                  },
+                },
+              ]
+            );
+          }}
+        >
+          <Text style={styles.doorBtnText}>Probar UI con lockscreen (5s delay)</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.doorBtn, { backgroundColor: '#3b0764', marginBottom: 8 }]}
+          onPress={async () => {
+            try {
+              const res = await sendTestPush('Test Portero');
+              Alert.alert('Test push', JSON.stringify(res));
+            } catch (err: any) {
+              Alert.alert('Test push fallo', err.message || String(err));
+            }
+          }}
+        >
+          <Text style={styles.doorBtnText}>Disparar test push (backend)</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.doorBtn, { backgroundColor: '#14532d' }]}
+          onPress={() => {
+            const t = getCachedFcmToken();
+            Alert.alert('FCM Token', t ?? 'Sin token todavia');
+          }}
+        >
+          <Text style={styles.doorBtnText}>Mostrar token FCM</Text>
+        </Pressable>
       </View>
 
       <View style={{ height: 40 }} />
